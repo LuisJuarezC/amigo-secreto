@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Organiza un intercambio de regalos y comparte un resultado individual con cada participante.">
+  <meta name="theme-color" content="#faf4ee">
+  <meta name="referrer" content="no-referrer">
+  <title>Amigo secreto</title>
+  <link rel="stylesheet" href="./estilos.css">
+  <script src="./sorteo.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero" id="hero">
+      <div class="hero-copy">
+        <h1>Amigo secreto</h1>
+        <p>Organiza el intercambio de regalos y comparte un enlace individual con cada participante.</p>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <span class="spark spark--left"></span>
+        <span class="spark spark--right"></span>
+        <span class="confetti confetti--top"></span>
+        <span class="confetti confetti--bottom"></span>
+        <div class="gift gift--gold"><i></i><b></b></div>
+        <div class="gift gift--rose"><i></i><b></b></div>
+      </div>
+    </header>
+
+    <noscript><p class="notice">Activa JavaScript en tu navegador para usar el sorteo.</p></noscript>
+
+    <section id="organizer" aria-label="Organizar el intercambio" hidden>
+      <form id="setup" novalidate>
+        <div class="setup-grid">
+          <section class="panel participants" aria-labelledby="participants-title">
+            <div class="panel-heading">
+              <h2 id="participants-title">Participantes</h2>
+              <output class="count" id="participant-count" for="names">0 personas</output>
+            </div>
+            <label for="names">Pega o escribe un nombre o apodo por línea.</label>
+            <textarea id="names" rows="6" placeholder="Lucía&#10;Jorge&#10;María&#10;Diego" aria-describedby="names-error" spellcheck="false"></textarea>
+            <p class="error" id="names-error" hidden></p>
+          </section>
+
+          <section class="panel event" aria-labelledby="event-title">
+            <div class="panel-heading">
+              <h2 id="event-title">Datos de la entrega</h2>
+              <span class="optional">Opcionales</span>
+            </div>
+            <div class="fields">
+              <div class="field">
+                <label for="budget">Presupuesto del regalo <span class="visually-hidden">en soles</span></label>
+                <div class="money-input">
+                  <span aria-hidden="true">S/</span>
+                  <input id="budget" type="text" inputmode="decimal" placeholder="Ej. 50.00" autocomplete="off">
+                </div>
+              </div>
+              <div class="field">
+                <label for="delivery-date">Fecha</label>
+                <input id="delivery-date" type="date">
+              </div>
+              <div class="field">
+                <label for="place">Lugar</label>
+                <input id="place" type="text" placeholder="Ej. Casa de Lucía" autocomplete="off">
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <details class="panel exclusions" id="exclusions">
+          <summary>
+            <span>Exclusiones <span class="optional">Opcionales</span></span>
+            <span class="expand-icon" aria-hidden="true"></span>
+          </summary>
+          <div class="exclusions-content">
+            <p>Las dos personas de cada par quedan excluidas entre sí.</p>
+            <div class="pair-list" id="pairs"></div>
+            <div class="pair-actions">
+              <button class="button button-secondary" id="add-pair" type="button">
+                <span aria-hidden="true">+</span> Agregar exclusión
+              </button>
+              <p class="muted" id="pair-hint">Agrega dos participantes para elegir un par.</p>
+            </div>
+          </div>
+        </details>
+
+        <p class="error form-error" id="form-error" role="alert" hidden></p>
+        <div class="actionbar">
+          <p class="muted">El sorteo se guarda en este navegador.</p>
+          <div class="actions">
+            <button class="button button-secondary" id="resume-draw" type="button" hidden>Volver al sorteo guardado</button>
+            <button class="button button-primary" type="submit">Realizar sorteo <span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+      </form>
+
+      <section class="panel results" id="results" aria-labelledby="results-title" hidden>
+        <div class="panel-heading">
+          <h2 id="results-title" tabindex="-1">Sorteo realizado</h2>
+          <span class="count" id="results-count"></span>
+        </div>
+        <p class="muted">Copia el mensaje de cada participante y envíalo por un chat privado. Quien tenga el enlace podrá consultar esa asignación.</p>
+        <p class="notice" id="storage-notice" hidden>Tu navegador impidió guardar el sorteo. Copia los mensajes antes de cerrar la página.</p>
+        <ul class="result-list" id="result-list"></ul>
+        <button class="button button-secondary" id="new-draw" type="button">Preparar otro sorteo</button>
+      </section>
+
+      <p class="notice local-notice" id="local-notice" hidden>Estás usando una copia local. Para compartir enlaces por WhatsApp, realiza el sorteo desde tu página publicada.</p>
+    </section>
+
+    <section class="panel reveal-card" id="participant" aria-labelledby="greeting" hidden>
+      <p class="reveal-brand">Amigo secreto</p>
+      <div class="reveal-art" aria-hidden="true">
+        <span class="spark spark--left"></span>
+        <span class="spark spark--right"></span>
+        <div class="gift gift--rose"><i></i><b></b></div>
+      </div>
+      <h1 id="greeting" tabindex="-1"></h1>
+      <button class="button button-primary reveal-button" id="reveal" type="button" aria-controls="assignment">Ver a quién me tocó</button>
+      <div class="assignment" id="assignment" hidden>
+        <p>Le regalas a</p>
+        <h2 id="recipient-name" tabindex="-1"></h2>
+        <dl class="event-facts" id="event-facts" hidden></dl>
+      </div>
+    </section>
+
+    <section class="panel reveal-card invalid-card" id="invalid-link" aria-labelledby="invalid-title" hidden>
+      <p class="reveal-brand">Amigo secreto</p>
+      <h1 id="invalid-title" tabindex="-1">El enlace está incompleto o no es válido</h1>
+      <p class="muted">Pídele a quien organizó el sorteo que te envíe tu enlace de nuevo.</p>
+    </section>
+  </main>
+
+  <template id="pair-template">
+    <div class="pair">
+      <select class="first-person"></select>
+      <select class="second-person"></select>
+      <button class="button remove-pair" type="button"><span aria-hidden="true">×</span></button>
+    </div>
+  </template>
+
+  <template id="result-template">
+    <li class="result-row">
+      <span class="result-name"></span>
+      <div class="row-actions">
+        <a class="result-link" target="_blank" rel="noopener noreferrer">Abrir enlace</a>
+        <button class="button button-secondary copy-message" type="button">Copiar mensaje</button>
+      </div>
+    </li>
+  </template>
+
+  <dialog id="copy-dialog" aria-labelledby="copy-title">
+    <form method="dialog">
+      <h2 id="copy-title">Copia este mensaje</h2>
+      <p>Selecciona el texto y cópialo para enviarlo por WhatsApp.</p>
+      <textarea aria-label="Mensaje para WhatsApp" rows="5" readonly></textarea>
+      <button class="button button-primary" type="submit">Cerrar</button>
+    </form>
+  </dialog>
+  <p class="visually-hidden" id="announcement" role="status"></p>
+</body>
+</html>
