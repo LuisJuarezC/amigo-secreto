@@ -2,10 +2,16 @@
 
 Organiza un intercambio de regalos desde el navegador. Cada participante recibe un enlace individual para descubrir a quién le regalará.
 
+## Intercambio con PIN
+
+[Amigo secreto](https://luisjuarezc.github.io/amigo-secreto/) abre la página donde todos ingresan con su PIN. Para generar los PIN y hacer el sorteo, abre **Administrar intercambio** con la cuenta de ChatGPT de quien organiza.
+
+Si estás retomando un intercambio de la versión anterior, accede a [su organizador](https://luisjuarezc.github.io/amigo-secreto/?anterior=1) desde el navegador donde lo guardaste.
+
 ## Publicar gratis en GitHub Pages
 
 1. [Crea un repositorio público en GitHub](https://github.com/new) llamado `amigo-secreto`. Activa la opción para inicializarlo con un README.
-2. Descomprime el paquete. En el repositorio, elige **Add file → Upload files**. Arrastra `index.html`, `estilos.css`, `sorteo.js` y la carpeta `fuentes` completos a la **raíz**. Pulsa **Commit changes** para guardarlos en la rama `main`.
+2. Descomprime el paquete. En el repositorio, elige **Add file → Upload files**. Arrastra `index.html`, los archivos CSS y JavaScript y la carpeta `fuentes` a la **raíz**. Pulsa **Commit changes** para guardarlos en la rama `main`.
 3. En **Settings → Pages**, elige **Deploy from a branch**, selecciona **main** y **/(root)** y pulsa **Save**.
 4. Cuando GitHub termine, abre **Visit site** en esa misma sección. La dirección habitual se verá como `https://TU-USUARIO.github.io/amigo-secreto/`.
 
