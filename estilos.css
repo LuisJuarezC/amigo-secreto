@@ -489,6 +489,30 @@ body.viewing-result .shell {
 .fact dt { color: var(--muted); }
 .fact dd { font-weight: 650; }
 
+.gift-response { min-height: 4.4rem; }
+.gift-tools .field { margin-top: .15rem; }
+.gift-tools .error { margin: 0; }
+.gift-card h1 { margin-block: .85rem .5rem; }
+.gift-card > .notice { font-weight: 650; }
+.gift-card form { display: grid; gap: .85rem; margin-top: 1.1rem; text-align: left; }
+.gift-card fieldset { min-width: 0; padding: .65rem; margin: 0; border: 1px solid var(--line); border-radius: .65rem; }
+.gift-card legend { padding-inline: .3rem; font-size: .88rem; font-weight: 700; color: var(--accent-dark); }
+.gift-card .error { margin-top: 0; }
+.gift-option { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8rem); gap: .55rem; }
+.gift-option label { line-height: 1.25; }
+
+.gift-ideas {
+  margin-top: 1rem;
+  padding-top: .8rem;
+  border-top: 1px solid #e8cdd5;
+  text-align: left;
+}
+
+.gift-ideas h3 { margin: 0; color: var(--accent-dark); font-size: .93rem; }
+.gift-ideas ul { display: grid; gap: .42rem; margin: .65rem 0 0; padding: 0; list-style: none; }
+.gift-ideas li { display: flex; justify-content: space-between; gap: .6rem; font-size: .9rem; }
+.gift-ideas li span:last-child { flex-shrink: 0; color: var(--muted); white-space: nowrap; }
+
 .invalid-card h1 { margin-block: 1rem .6rem; font-size: clamp(1.75rem, 5vw, 2.7rem); }
 
 dialog {
@@ -527,4 +551,5 @@ dialog button { justify-self: end; }
   .hero-art { right: -5.1rem; bottom: -2.7rem; transform: scale(.49); }
   .panel-heading { gap: .35rem; }
   h2 { font-size: 1.18rem; }
+  .gift-option { grid-template-columns: 1fr; }
 }

@@ -7,8 +7,8 @@
   <meta name="theme-color" content="#faf4ee">
   <meta name="referrer" content="no-referrer">
   <title>Amigo secreto</title>
-  <link rel="stylesheet" href="./estilos.css">
-  <script src="./sorteo.js" defer></script>
+  <link rel="stylesheet" href="./estilos.css?v=2">
+  <script src="./sorteo.js?v=2" defer></script>
 </head>
 <body>
   <main class="shell">
@@ -84,6 +84,27 @@
           </div>
         </details>
 
+        <details class="panel exclusions gift-tools" id="gift-tools">
+          <summary>
+            <span>Sugerencias de regalo <span class="optional" id="gift-count">Opcionales</span></span>
+            <span class="expand-icon" aria-hidden="true"></span>
+          </summary>
+          <div class="exclusions-content">
+            <p>Comparte el enlace en el grupo. Cada persona podrá elegir tres regalos dentro del presupuesto y enviarte su respuesta por WhatsApp.</p>
+            <div>
+              <button class="button button-secondary" id="copy-gift-link" type="button">Copiar enlace general</button>
+            </div>
+            <div class="field">
+              <label for="gift-response">Respuesta recibida por WhatsApp</label>
+              <textarea id="gift-response" class="gift-response" rows="2" placeholder="Pega el mensaje o enlace de la persona"></textarea>
+            </div>
+            <div>
+              <button class="button button-secondary" id="register-gifts" type="button">Registrar sugerencias</button>
+            </div>
+            <p id="gift-status" role="status" hidden></p>
+          </div>
+        </details>
+
         <p class="error form-error" id="form-error" role="alert" hidden></p>
         <div class="actionbar">
           <p class="muted">El sorteo se guarda en este navegador.</p>
@@ -121,7 +142,47 @@
         <p>Le regalas a</p>
         <h2 id="recipient-name" tabindex="-1"></h2>
         <dl class="event-facts" id="event-facts" hidden></dl>
+        <section class="gift-ideas" id="recipient-gifts" aria-labelledby="recipient-gifts-title" hidden>
+          <h3 id="recipient-gifts-title">Sus sugerencias de regalo</h3>
+          <ul id="recipient-gift-list"></ul>
+        </section>
       </div>
+    </section>
+
+    <section class="panel reveal-card gift-card" id="gift-invitation" aria-labelledby="gift-invitation-title" hidden>
+      <p class="reveal-brand">Amigo secreto</p>
+      <h1 id="gift-invitation-title">Mis ideas de regalo</h1>
+      <p class="muted">Escribe tres opciones y envíalas por WhatsApp a quien organiza el sorteo.</p>
+      <p class="notice" id="gift-invitation-budget"></p>
+      <form id="gift-form" novalidate>
+        <div class="field">
+          <label for="gift-name">Tu nombre o apodo en el sorteo</label>
+          <input id="gift-name" type="text" autocomplete="name" required>
+        </div>
+        <fieldset>
+          <legend>Opción 1</legend>
+          <div class="gift-option">
+            <div><label for="gift-1">Regalo</label><input id="gift-1" type="text" maxlength="120" placeholder="Ej. Una taza" required></div>
+            <div><label for="price-1">Precio aprox.<span class="visually-hidden"> en soles</span></label><input id="price-1" type="text" inputmode="decimal" placeholder="Ej. 35.00" required></div>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Opción 2</legend>
+          <div class="gift-option">
+            <div><label for="gift-2">Regalo</label><input id="gift-2" type="text" maxlength="120" required></div>
+            <div><label for="price-2">Precio aprox.<span class="visually-hidden"> en soles</span></label><input id="price-2" type="text" inputmode="decimal" required></div>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Opción 3</legend>
+          <div class="gift-option">
+            <div><label for="gift-3">Regalo</label><input id="gift-3" type="text" maxlength="120" required></div>
+            <div><label for="price-3">Precio aprox.<span class="visually-hidden"> en soles</span></label><input id="price-3" type="text" inputmode="decimal" required></div>
+          </div>
+        </fieldset>
+        <p class="error" id="gift-form-error" role="alert" hidden></p>
+        <button class="button button-primary" type="submit">Copiar respuesta para WhatsApp</button>
+      </form>
     </section>
 
     <section class="panel reveal-card invalid-card" id="invalid-link" aria-labelledby="invalid-title" hidden>
@@ -151,9 +212,9 @@
 
   <dialog id="copy-dialog" aria-labelledby="copy-title">
     <form method="dialog">
-      <h2 id="copy-title">Copia este mensaje</h2>
-      <p>Selecciona el texto y cópialo para enviarlo por WhatsApp.</p>
-      <textarea aria-label="Mensaje para WhatsApp" rows="5" readonly></textarea>
+      <h2 id="copy-title">Copia este texto</h2>
+      <p>Selecciona el texto y cópialo para compartirlo por WhatsApp.</p>
+      <textarea aria-label="Texto para WhatsApp" rows="5" readonly></textarea>
       <button class="button button-primary" type="submit">Cerrar</button>
     </form>
   </dialog>

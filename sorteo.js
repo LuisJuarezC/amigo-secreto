@@ -15,17 +15,27 @@ const resumeButton = byId("resume-draw");
 const resultList = byId("result-list");
 const revealButton = byId("reveal");
 const copyDialog = byId("copy-dialog");
+const giftTools = byId("gift-tools");
+const giftResponse = byId("gift-response");
+const giftForm = byId("gift-form");
 
 const version = 1;
 const resultPrefix = "#resultado=";
+const giftInvitePrefix = "#sugerir=";
+const giftReplyPrefix = "#ideas=";
 const sitePath = location.pathname.replace(/\/index\.html$/, "/");
 const storageKey = "amigo-secreto:" + version + ":" + sitePath;
+const draftKey = storageKey + ":borrador";
 const soles = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" });
 const dateFormat = new Intl.DateTimeFormat("es-PE", { dateStyle: "long", timeZone: "UTC" });
 
 let savedDraw = null;
 let storageFailed = false;
 let openedResult = null;
+let organizerReady = false;
+let draftActive = false;
+let draftGifts = new Map();
+let inviteBudget = null;
 
 function nameKey(name) {
   return name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es-PE");
@@ -109,6 +119,7 @@ function addPair(names, first = "", second = "") {
     pair.remove();
     labelPairs();
     clearFormError();
+    rememberDraft();
     (nextControl.disabled ? exclusionsPanel.querySelector("summary") : nextControl).focus();
   });
   pairList.append(pair);
@@ -150,10 +161,16 @@ function isDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function parseAmount(raw) {
+  const text = raw.trim();
+  if (!/^\d+(?:[.,]\d{1,2})?$/.test(text)) return null;
+  const amount = Number(text.replace(",", "."));
+  return Number.isFinite(amount) ? amount : null;
+}
+
 function readEventDetails() {
-  const enteredBudget = budgetInput.value.trim();
-  const budget = enteredBudget ? Number(enteredBudget.replace(",", ".")) : null;
-  if (enteredBudget && (!/^\d+(?:[.,]\d{1,2})?$/.test(enteredBudget) || !Number.isFinite(budget))) {
+  const budget = parseAmount(budgetInput.value);
+  if (budgetInput.value.trim() && budget === null) {
     showFormError("Escribe un presupuesto válido en soles, por ejemplo 50.00.", budgetInput);
     return null;
   }
@@ -233,7 +250,7 @@ function validName(value) {
 
 function validDetails(details) {
   return details !== null && typeof details === "object"
-    && (details.budget === null || (Number.isFinite(details.budget) && details.budget >= 0))
+    && (details.budget === null || validBudget(details.budget))
     && (details.date === "" || isDate(details.date))
     && typeof details.place === "string";
 }
@@ -264,62 +281,265 @@ function saveDraw(draw) {
   }
 }
 
-function resultLink(assignment, details) {
-  // Un enlace lleva una sola asignación en el fragmento de la URL.
-  const data = JSON.stringify({ version, ...assignment, details });
-  const bytes = new TextEncoder().encode(data);
+function makeLink(prefix, data) {
+  const bytes = new TextEncoder().encode(JSON.stringify({ version, ...data }));
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
   const encoded = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const link = new URL(location.href);
   link.search = "";
-  link.hash = resultPrefix + encoded;
+  link.hash = prefix + encoded;
   return link.href;
 }
 
-function readResult(fragment) {
-  if (!fragment.startsWith(resultPrefix)) return null;
-  const encoded = fragment.slice(resultPrefix.length);
+function readLink(fragment, prefix) {
+  if (!fragment.startsWith(prefix)) return null;
+  const encoded = fragment.slice(prefix.length);
   if (!/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
   try {
     const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    const result = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    return result?.version === version && validName(result.giver) && validName(result.receiver)
-      && nameKey(result.giver) !== nameKey(result.receiver) && validDetails(result.details)
-      ? result
-      : null;
+    const data = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    return data?.version === version ? data : null;
   } catch {
     return null;
   }
 }
 
-async function copyMessage(message, button, name) {
+function readResult(fragment) {
+  const result = readLink(fragment, resultPrefix);
+  return validName(result?.giver) && validName(result.receiver)
+    && nameKey(result.giver) !== nameKey(result.receiver) && validDetails(result.details)
+    ? result
+    : null;
+}
+
+async function copyText(text, button, feedback, announcement = feedback) {
   try {
-    await navigator.clipboard.writeText(message);
+    await navigator.clipboard.writeText(text);
   } catch {
     if (typeof copyDialog.showModal !== "function") {
-      window.prompt("Copia este mensaje para WhatsApp.", message);
+      window.prompt("Copia este texto para WhatsApp.", text);
       return;
     }
     const box = copyDialog.querySelector("textarea");
-    box.value = message;
+    box.value = text;
     if (!copyDialog.open) copyDialog.showModal();
     box.focus();
     box.select();
     return;
   }
-  button.textContent = "Mensaje copiado";
-  const announcement = byId("announcement");
-  announcement.textContent = "Mensaje copiado para " + name + ".";
-  window.setTimeout(() => { button.textContent = "Copiar mensaje"; }, 1800);
+  button.dataset.copyLabel ??= button.textContent;
+  button.textContent = feedback;
+  byId("announcement").textContent = announcement;
+  window.setTimeout(() => { button.textContent = button.dataset.copyLabel; }, 1800);
+}
+
+function validBudget(value) {
+  return Number.isFinite(value) && value >= 0;
+}
+
+function validGiftIdeas(ideas, budget) {
+  return validBudget(budget) && Array.isArray(ideas) && ideas.length === 3
+    && ideas.every((idea) => validName(idea?.name) && idea.name.length <= 120
+      && validBudget(idea.price) && idea.price <= budget)
+    && new Set(ideas.map((idea) => nameKey(idea.name))).size === 3;
+}
+
+function storedGifts(entries) {
+  const gifts = Array.isArray(entries) ? entries : [];
+  return new Map(gifts.filter((entry) => Array.isArray(entry) && validName(entry[0])
+    && validGiftIdeas(entry[1], Number.MAX_VALUE)));
+}
+
+function readGiftReply(hash) {
+  const reply = readLink(hash, giftReplyPrefix);
+  return validName(reply?.name) && validGiftIdeas(reply.ideas, reply.budget) ? reply : null;
+}
+
+function readDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(draftKey));
+  } catch {
+    return null;
+  }
+}
+
+function latestDraftGifts() {
+  return new Map([...draftGifts, ...storedGifts(readDraft()?.gifts)]);
+}
+
+function rememberDraft(newGift) {
+  if (!draftActive || setup.hidden) return true;
+  draftGifts = latestDraftGifts();
+  if (newGift) draftGifts.set(...newGift);
+  const pairs = Array.from(pairList.children, (pair) =>
+    Array.from(pair.querySelectorAll("select"), (select) => select.value));
+  const draft = {
+    names: namesInput.value,
+    budget: budgetInput.value,
+    date: dateInput.value,
+    place: placeInput.value,
+    pairs,
+    gifts: [...draftGifts],
+  };
+  try {
+    localStorage.setItem(draftKey, JSON.stringify(draft));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function restoreDraft() {
+  const draft = readDraft();
+  if (typeof draft?.names !== "string") return false;
+  namesInput.value = draft.names;
+  budgetInput.value = typeof draft.budget === "string" ? draft.budget : "";
+  dateInput.value = typeof draft.date === "string" ? draft.date : "";
+  placeInput.value = typeof draft.place === "string" ? draft.place : "";
+  draftGifts = storedGifts(draft.gifts);
+  const { names } = updateParticipants();
+  for (const pair of Array.isArray(draft.pairs) ? draft.pairs : []) {
+    if (Array.isArray(pair) && pair.length === 2 && pair.every((value) => typeof value === "string")) {
+      addPair(names, ...pair);
+    }
+  }
+  exclusionsPanel.open = pairList.children.length > 0;
+  resumeButton.hidden = !savedDraw;
+  draftActive = true;
+  return true;
+}
+
+function giftContext() {
+  if (setup.hidden && savedDraw) {
+    const names = new Map(savedDraw.assignments.map(({ giver }) => [nameKey(giver), giver]));
+    return { names, budget: savedDraw.details.budget, gifts: storedGifts(savedDraw.gifts) };
+  }
+  return { names: readNames().names, budget: parseAmount(budgetInput.value), gifts: draftGifts };
+}
+
+function updateGiftCount() {
+  const { names, budget, gifts } = giftContext();
+  const count = [...names.keys()].filter((name) => validGiftIdeas(gifts.get(name), budget)).length;
+  byId("gift-count").textContent = names.size ? count + " de " + names.size + " con ideas" : "Opcionales";
+}
+
+function showGiftStatus(message, isError = false) {
+  const status = byId("gift-status");
+  status.textContent = message;
+  status.classList.toggle("error", isError);
+  status.hidden = !message;
+}
+
+function copyGiftInvitation(button) {
+  const { budget } = giftContext();
+  if (!validBudget(budget)) {
+    showGiftStatus("Indica un presupuesto válido para preparar el enlace general.", true);
+    if (!setup.hidden) budgetInput.focus();
+    return;
+  }
+  draftActive = true;
+  const stored = rememberDraft();
+  showGiftStatus(stored
+    ? "Comparte el enlace con el grupo. Las respuestas te llegarán por WhatsApp."
+    : "El borrador queda abierto en esta pestaña. El navegador impidió guardarlo.");
+  copyText(makeLink(giftInvitePrefix, { budget }), button, "Enlace copiado");
+}
+
+function registerGifts() {
+  const hash = giftResponse.value.match(/#ideas=[A-Za-z0-9_-]+/)?.[0] ?? "";
+  const reply = readGiftReply(hash);
+  if (!reply) {
+    showGiftStatus("Pega el mensaje completo o el enlace de respuesta de la persona.", true);
+    giftResponse.focus();
+    return;
+  }
+
+  const inResults = setup.hidden;
+  if (inResults && !storageFailed) savedDraw = readSavedDraw() ?? savedDraw;
+  const { names, budget, gifts } = giftContext();
+  const key = nameKey(reply.name);
+  const participant = names.get(key);
+  if (!participant) {
+    showGiftStatus("Agrega «" + reply.name + "» a la lista de participantes o revisa el nombre de la respuesta.", true);
+    return;
+  }
+  if (!validGiftIdeas(reply.ideas, budget)) {
+    showGiftStatus("Las tres opciones deben estar dentro del presupuesto actual del sorteo.", true);
+    return;
+  }
+
+  let message = "Sugerencias de " + participant + " registradas.";
+  if (inResults) {
+    gifts.set(key, reply.ideas);
+    saveDraw({ ...savedDraw, gifts: [...gifts] });
+    renderSavedDraw();
+    message += " Si ya enviaste el enlace a quien le regala, vuelve a copiarlo y compártelo.";
+  } else {
+    draftActive = true;
+    if (!rememberDraft([key, reply.ideas])) message += " Conserva esta pestaña abierta para mantenerlas.";
+    updateGiftCount();
+  }
+  giftResponse.value = "";
+  showGiftStatus(message);
+}
+
+function shareGiftIdeas(event) {
+  event.preventDefault();
+  const error = byId("gift-form-error");
+  const name = byId("gift-name").value.trim();
+  const ideas = [1, 2, 3].map((index) => ({
+    name: byId("gift-" + index).value.trim(),
+    price: parseAmount(byId("price-" + index).value),
+  }));
+  if (!validName(name) || !validGiftIdeas(ideas, inviteBudget)) {
+    error.textContent = !validName(name)
+      ? "Escribe el nombre o apodo con el que apareces en el sorteo."
+      : "Escribe tres regalos diferentes y un precio válido para cada uno, hasta "
+        + soles.format(inviteBudget) + " por regalo.";
+    error.hidden = false;
+    return;
+  }
+  error.hidden = true;
+
+  const link = makeLink(giftReplyPrefix, { name, budget: inviteBudget, ideas });
+  const message = [
+    "Hola, soy " + name + ". Estas son mis ideas para el Amigo secreto.",
+    ...ideas.map((idea) => "• " + idea.name + " (" + soles.format(idea.price) + ")"),
+    "",
+    "Enlace para registrar mis sugerencias",
+    link,
+  ].join("\n");
+  copyText(message, giftForm.querySelector("button"), "Respuesta copiada");
+}
+
+function renderGiftIdeas(ideas, budget) {
+  const list = byId("recipient-gift-list");
+  list.replaceChildren();
+  byId("recipient-gifts").hidden = !validGiftIdeas(ideas, budget);
+  if (byId("recipient-gifts").hidden) return;
+  for (const idea of ideas) {
+    const item = document.createElement("li");
+    const name = document.createElement("span");
+    name.textContent = idea.name;
+    const price = document.createElement("span");
+    price.textContent = soles.format(idea.price);
+    item.append(name, price);
+    list.append(item);
+  }
 }
 
 function renderSavedDraw(moveFocus = false) {
   const fragment = document.createDocumentFragment();
+  const gifts = storedGifts(savedDraw.gifts);
   for (const assignment of savedDraw.assignments) {
     const row = byId("result-template").content.firstElementChild.cloneNode(true);
     const name = assignment.giver;
-    const link = resultLink(assignment, savedDraw.details);
+    // El enlace solo lleva la asignación y las ideas de esa persona.
+    const data = { ...assignment, details: savedDraw.details };
+    const ideas = gifts.get(nameKey(assignment.receiver));
+    if (validGiftIdeas(ideas, savedDraw.details.budget)) data.gifts = ideas;
+    const link = makeLink(resultPrefix, data);
     row.querySelector(".result-name").textContent = name;
     const open = row.querySelector("a");
     open.href = link;
@@ -331,7 +551,8 @@ function renderSavedDraw(moveFocus = false) {
       "Ya está listo el sorteo de Amigo secreto. Abre tu enlace para ver a quién le regalarás.",
       link,
     ].join("\n");
-    button.addEventListener("click", () => copyMessage(message, button, name));
+    button.addEventListener("click", () =>
+      copyText(message, button, "Mensaje copiado", "Mensaje copiado para " + name + "."));
     fragment.append(row);
   }
   resultList.replaceChildren(fragment);
@@ -339,6 +560,8 @@ function renderSavedDraw(moveFocus = false) {
   byId("storage-notice").hidden = !storageFailed;
   setup.hidden = true;
   byId("results").hidden = false;
+  if (giftTools.parentElement === setup) byId("new-draw").before(giftTools);
+  updateGiftCount();
   if (moveFocus) byId("results-title").focus();
 }
 
@@ -368,24 +591,41 @@ function generateDraw(event) {
 
   const people = [...names.values()];
   const assignments = people.map((giver, index) => ({ giver, receiver: people[recipients[index]] }));
-  saveDraw({ version, assignments, details, exclusions });
+  const gifts = [...latestDraftGifts()].filter(([name, ideas]) =>
+    names.has(name) && validGiftIdeas(ideas, details.budget));
+  saveDraw({ version, assignments, details, exclusions, gifts });
+  if (draftActive && !storageFailed) {
+    draftActive = false;
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      // El sorteo ya se guardó. Algunos navegadores restringen localStorage.
+    }
+  }
+  showGiftStatus("");
   renderSavedDraw(true);
 }
 
 function prepareAnotherDraw() {
-  namesInput.value = savedDraw.assignments.map(({ giver }) => giver).join("\n");
-  const { budget, date, place } = savedDraw.details;
-  budgetInput.value = budget ?? "";
-  dateInput.value = date;
-  placeInput.value = place;
-  pairList.replaceChildren();
-  const { names } = updateParticipants();
-  for (const [first, second] of savedDraw.exclusions) addPair(names, first, second);
-  exclusionsPanel.open = savedDraw.exclusions.length > 0;
+  if (!draftActive) {
+    namesInput.value = savedDraw.assignments.map(({ giver }) => giver).join("\n");
+    const { budget, date, place } = savedDraw.details;
+    budgetInput.value = budget ?? "";
+    dateInput.value = date;
+    placeInput.value = place;
+    draftGifts = storedGifts(savedDraw.gifts);
+    pairList.replaceChildren();
+    const { names } = updateParticipants();
+    for (const [first, second] of savedDraw.exclusions) addPair(names, first, second);
+    exclusionsPanel.open = savedDraw.exclusions.length > 0;
+  }
   clearFormError();
+  showGiftStatus("");
   resumeButton.hidden = false;
   byId("results").hidden = true;
   setup.hidden = false;
+  formError.before(giftTools);
+  updateGiftCount();
   namesInput.focus();
 }
 
@@ -414,52 +654,92 @@ function renderEventFacts(details) {
 
 function showPage() {
   const fragment = location.hash;
-  const isIndividual = Boolean(fragment);
-  openedResult = isIndividual ? readResult(fragment) : null;
-  document.body.classList.toggle("viewing-result", isIndividual);
-  byId("hero").hidden = isIndividual;
-  byId("organizer").hidden = isIndividual;
+  openedResult = readResult(fragment);
+  const invitation = readLink(fragment, giftInvitePrefix);
+  inviteBudget = validBudget(invitation?.budget) ? invitation.budget : null;
+  const reply = readGiftReply(fragment);
+  const organizerMode = !fragment || Boolean(reply);
+  document.body.classList.toggle("viewing-result", !organizerMode);
+  byId("hero").hidden = !organizerMode;
+  byId("organizer").hidden = !organizerMode;
   byId("participant").hidden = !openedResult;
-  byId("invalid-link").hidden = !isIndividual || Boolean(openedResult);
+  byId("gift-invitation").hidden = inviteBudget === null;
+  byId("invalid-link").hidden = organizerMode || Boolean(openedResult) || inviteBudget !== null;
 
-  if (isIndividual) {
+  if (!organizerMode) {
     if (openedResult) {
       byId("greeting").textContent = "Hola, " + openedResult.giver;
       byId("recipient-name").textContent = "";
       byId("event-facts").replaceChildren();
+      renderGiftIdeas(null, null);
       byId("assignment").hidden = true;
       revealButton.hidden = false;
+    }
+    if (inviteBudget !== null) {
+      giftForm.reset();
+      byId("gift-form-error").hidden = true;
+      byId("gift-invitation-budget").textContent = "Hasta " + soles.format(inviteBudget) + " por opción";
     }
     return;
   }
 
   byId("local-notice").hidden = location.protocol !== "file:";
-  savedDraw = savedDraw ?? readSavedDraw();
-  if (savedDraw) {
-    renderSavedDraw();
-  } else {
-    updateParticipants();
+  if (!organizerReady) {
+    organizerReady = true;
+    savedDraw = readSavedDraw();
+    if (!restoreDraft()) {
+      if (savedDraw) renderSavedDraw();
+      else updateParticipants();
+    }
+  }
+  updateGiftCount();
+  if (reply) {
+    giftResponse.value = location.href;
+    history.replaceState(null, "", location.pathname + location.search);
+    giftTools.open = true;
+    showGiftStatus("Pulsa «Registrar sugerencias» para guardar la respuesta de " + reply.name + ".");
+    giftResponse.focus();
   }
 }
 
 setup.addEventListener("submit", generateDraw);
 setup.addEventListener("input", (event) => {
+  if (giftTools.contains(event.target)) return;
   clearFormError();
   event.target.removeAttribute("aria-invalid");
   if (event.target === namesInput) updateParticipants();
+  if (event.target === namesInput || event.target === budgetInput) updateGiftCount();
+  rememberDraft();
 });
 addPairButton.addEventListener("click", () => {
   addPair(readNames().names).focus();
+  rememberDraft();
 });
+byId("copy-gift-link").addEventListener("click", (event) => copyGiftInvitation(event.currentTarget));
+byId("register-gifts").addEventListener("click", registerGifts);
+giftForm.addEventListener("submit", shareGiftIdeas);
+giftForm.addEventListener("input", () => { byId("gift-form-error").hidden = true; });
 byId("new-draw").addEventListener("click", prepareAnotherDraw);
 resumeButton.addEventListener("click", () => renderSavedDraw(true));
 revealButton.addEventListener("click", () => {
   const name = byId("recipient-name");
   name.textContent = openedResult.receiver;
   renderEventFacts(openedResult.details);
+  renderGiftIdeas(openedResult.gifts, openedResult.details.budget);
   byId("assignment").hidden = false;
   revealButton.hidden = true;
   name.focus();
 });
 window.addEventListener("hashchange", showPage);
+window.addEventListener("storage", (event) => {
+  if (!organizerReady || byId("organizer").hidden) return;
+  if (event.key === draftKey && event.newValue && draftActive && !setup.hidden) {
+    draftGifts = latestDraftGifts();
+    updateGiftCount();
+  }
+  if (event.key === storageKey && event.newValue && setup.hidden && !storageFailed) {
+    savedDraw = readSavedDraw() ?? savedDraw;
+    renderSavedDraw();
+  }
+});
 showPage();
